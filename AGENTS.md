@@ -52,7 +52,10 @@ The master seed file is `data/seed_examples.jsonl`. Each line is a JSON object:
 }
 ```
 
-### Current distribution (30 seeds, tcf-0001 through tcf-0030)
+### Current distribution (30 seeds + 132 generated = 162 total, generation in progress)
+
+Seed corpus (tcf-0001 through tcf-0030): hand-crafted, high quality.
+Generated (tcf-0031+): LLM-generated, quality-filtered. See `data/generated_examples.jsonl`.
 
 | Domain | Count | IDs |
 |--------|-------|-----|

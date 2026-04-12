@@ -197,7 +197,43 @@ three-column-format-model/
 
 ## Current Status
 
-**Phase 1 complete.** Moving to Phase 2 (data generation). The generation script is the next build.
+**Phase 2 in progress.** Generation script built, validated, and running. Gemini Flash pass underway overnight.
+
+### Data status (as of 12 Apr 2026)
+- **Seed corpus:** 30 hand-crafted examples (tcf-0001 through tcf-0030)
+- **Haiku pass (complete):** 132 passed / 750 attempted (17.6% pass rate). $129 cost. Output: `data/generated_examples.jsonl`
+- **Gemini Flash pass (running):** `--resume` mode, skipping 750 already-attempted IDs. Using `google/gemini-2.0-flash-001`. Cost: ~$1 for full run. Test run showed **71% pass rate** with stem-based verb matching and expanded domain tags.
+- **Estimated total after Gemini Flash completes:** ~530 + 132 = ~660 examples
+
+### Generation script improvements (done)
+- Stem-based action verb matching (5-char stem comparison)
+- ~60 valid domain tags including PMESII abbreviations
+- Outermost-brace JSON parser (depth-tracking)
+- Gemma 4 chat template output (`--format gemma4`)
+- Rejected records now store raw parsed JSON for re-filtering
+- Framework validation with alias support
+
+### What's running overnight
+- Process: `proc_7f24bb59b1cb` — Gemini Flash full pass with `--resume`
+- Command: `uv run scripts/generate_training_data.py --resume --model google/gemini-2.0-flash-001`
+- Output: appends to `data/generated_examples.jsonl` and `data/rejected_examples.jsonl`
+- Expected completion: ~4-5 hours from 22:00 BST
+
+### Tomorrow morning checklist
+1. Check generation completed: `tail -5 ~/.hermes/logs/` or check process status
+2. Verify output: `wc -l data/generated_examples.jsonl` — expect ~530+ new examples
+3. Combine seeds + generated into training set
+4. Run `--format gemma4` converter or write a quick merge script
+5. Create train/eval split (90/10)
+6. Start training pipeline (Phase 3)
+
+## Phase 2: Data Generation (IN PROGRESS)
+
+### 2.1 Generation script ✓
+- Built at `scripts/generate_training_data.py`
+- Validated against live API (Haiku + Gemini Flash)
+- Reviewed by Claude Opus (two passes)
+- Committed and pushed to GitHub
 
 ## Risks
 
