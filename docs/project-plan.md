@@ -21,7 +21,7 @@ These questions apply everywhere. The model needs to learn the chain, not the do
 
 ---
 
-## Phase 1: Foundation (current)
+## Phase 1: Foundation (DONE)
 
 ### 1.1 Format specification
 - [x] Document the 3CF structure (Factor, Deduction, Conclusion)
@@ -31,21 +31,21 @@ These questions apply everywhere. The model needs to learn the chain, not the do
 
 ### 1.2 Seed corpus
 - [x] Create schema for training examples (JSONL with thinking trace)
-- [x] Write 3 military seed examples (basic, intermediate, advanced)
-- [ ] Write non-military seeds across domains (business, medical, engineering, policy, crisis)
-- [ ] Target: 25-30 hand-crafted seeds total
-- [ ] Each seed demonstrates genuine analytical depth, not template-filling
+- [x] Write 30 hand-crafted seeds across 9 domains
+  - Business (5), Medical (5), Crisis (4), Policy (4), Engineering (3), Humanitarian (3), Offensive (2), Stability (2), Defensive (2)
+  - Basic (7), Intermediate (14), Advanced (9)
+- [x] Each seed demonstrates genuine analytical depth
 
 ### 1.3 Gemma 4 training format
 - [x] Document Gemma 4 chat template and thinking mode tokens
-- [x] Create mapping from 3CF schema to Gemma 4 format
-- [ ] Validate format by running a seed through the template
+- [x] Validate format against official Google docs (ai.google.dev/gemma)
+- [x] Map 3CF schema to Gemma 4 format with full training example
 
-**Deliverable:** 25-30 high-quality seed examples covering 5+ domains, in validated Gemma 4 format.
+**Deliverable:** 30 high-quality seed examples covering 9 domains, in validated Gemma 4 format. ✓
 
 ---
 
-## Phase 2: Data Generation
+## Phase 2: Data Generation (NEXT)
 
 ### 2.1 Generation script
 - Build a Python script that:
@@ -88,14 +88,26 @@ These questions apply everywhere. The model needs to learn the chain, not the do
 ### 3.1 Environment setup
 - Gemma 4 26B-A4B MoE from HuggingFace (`google/gemma-4-26B-A4B-it`)
 - Unsloth for QLoRA fine-tuning (4-bit NF4, bfloat16 compute)
-- Single GPU (24GB+ VRAM)
+- Single GPU (Tesla P40 24GB) — see VRAM decision tree below
 
-### 3.2 Base model evaluation
+### 3.2 VRAM Decision Tree
+
+| Option | Model | Method | VRAM | Confidence |
+|--------|-------|--------|------|------------|
+| A (try first) | 26B-A4B MoE | QLoRA | ~15-20GB est. | Untested — may OOM |
+| B (fallback) | 31B Dense | QLoRA | 22 GB | Confirmed working |
+| C (cloud) | 26B-A4B MoE | QLoRA | 40GB+ (A100) | Always works |
+
+- **Try Option A first.** Unsloth has MoE-specific Triton kernels (12x speedup claim). The 4-bit quantized base model is ~12.5GB, leaving ~11.5GB for adapters/gradients/optimizer. It might fit.
+- **If OOM, switch to Option B.** 31B Dense QLoRA is confirmed at 22GB. Strong model, proven fine-tuning path.
+- **Option C if we need MoE regardless.** Lambda Labs A100 40GB or RunPod.
+
+### 3.3 Base model evaluation
 - Run base Gemma 4 on the eval set before any training
 - Establish baseline for: format compliance, reasoning depth, audit trail integrity
 - This tells us what the model already knows vs what the fine-tune adds
 
-### 3.3 Training run
+### 3.4 Training run
 - LoRA rank: 16-32, alpha: 32-64
 - Target modules: all-linear
 - Learning rate: 1e-4, linear schedule
@@ -104,12 +116,12 @@ These questions apply everywhere. The model needs to learn the chain, not the do
 - Max sequence length: 2048-4096
 - completion_only_loss: True
 
-### 3.4 Checkpoint evaluation
+### 3.5 Checkpoint evaluation
 - Evaluate after each epoch on held-out eval set
 - Metrics: format compliance, audit trail integrity, deduction depth, conclusion actionability
 - Select best checkpoint based on eval metrics
 
-### 3.5 Merge and quantise
+### 3.6 Merge and quantise
 - Merge LoRA adapters into base model
 - GGUF quantisation via llama.cpp for local deployment
 - Test inference quality on held-out and novel scenarios
@@ -163,13 +175,14 @@ These questions apply everywhere. The model needs to learn the chain, not the do
 ```
 three-column-format-model/
 ├── README.md
+├── AGENTS.md
 ├── docs/
 │   ├── project-plan.md        ← this file
 │   ├── format-spec.md         ← 3CF structure and rules
 │   ├── dataset-design.md      ← training data schema
 │   └── training-plan.md       ← Gemma 4 fine-tuning approach
 ├── data/
-│   ├── seed_examples.jsonl    ← hand-crafted seeds
+│   ├── seed_examples.jsonl    ← 30 hand-crafted seeds
 │   └── gemma4_training_format_example.md
 ├── scripts/
 │   ├── generate.py            ← data generation pipeline
@@ -184,11 +197,11 @@ three-column-format-model/
 
 ## Current Status
 
-**Phase 1** — Foundation. Format spec and schema done. 3 military seeds written. Need 20-30 more seeds across domains, then we move to Phase 2.
+**Phase 1 complete.** Moving to Phase 2 (data generation). The generation script is the next build.
 
 ## Risks
 
 - **Analytical depth in generated data:** The biggest risk. Shallow deductions that restate factors will produce a model that formats well but thinks poorly. Mitigation: strong seeds, iterative prompt refinement, manual review.
+- **MoE QLoRA VRAM:** 26B-A4B QLoRA may not fit in 24GB. Mitigation: 31B Dense fallback (confirmed 22GB), or cloud GPU.
 - **Domain vocabulary drift:** Generated examples might use inconsistent terminology within a domain. Mitigation: seed exemplars per domain, generation prompt with domain-specific vocabulary guidance.
-- **Gemma 4 MoE fine-tuning quirks:** Less community experience than dense models. Mitigation: backup plan is Gemma 4 31B Dense or Qwen3-14B.
 - **Sequence length:** Thinking traces + structured output can be long. May need to cap at 4096 tokens, which could truncate complex analyses. Mitigation: monitor length distribution, adjust max_seq_len accordingly.

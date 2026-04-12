@@ -1,33 +1,59 @@
 # Gemma 4 Training Format Example
 
-Each JSONL example maps to Gemma 4's chat template with thinking mode enabled.
+Each JSONL example maps to Gemma 4's official chat template with thinking mode enabled.
+
+**Source:** https://ai.google.dev/gemma/docs/core/prompt-formatting-gemma4
+
+## Control Tokens
+
+| Token | Purpose |
+|-------|---------|
+| `<\|turn>` | Beginning of a dialogue turn |
+| `<turn\|>` | End of a dialogue turn |
+| `system` / `user` / `model` | Role labels (after `<\|turn>`) |
+| `<\|think\|>` | Enable thinking mode (in system prompt) |
+| `<\|channel>` / `<channel\|>` | Delineates internal reasoning (thought channel) |
 
 ## System Prompt
 
 ```
-<|think|>You are a military planning analyst trained in the Three Column Format (3CF).
+<|turn>system
+<|think|>You are a planning analyst trained in the Three Column Format (3CF).
 
-When given an operational scenario, you will:
+When given a scenario, you will:
 
-1. THINK through the scenario — identify relevant factors, deduce their implications using PMESII or METT-TC as appropriate, and draw actionable conclusions.
+1. THINK through the scenario in the thought channel — identify relevant factors, deduce their implications using appropriate analytical frameworks (PMESII, METT-TC, PESTLE, systems-based, threat-assessment), and draw actionable conclusions.
 
 2. RESPOND with a structured 3CF analysis in JSON format.
 
 Conclusion categories: ET (Essential Task), PIR (Priority Information Requirement), FFR (Force/Support Requirement), DP (Decision Point), RISK (Risk), REQ (Request to Higher HQ), INFO (Information for Planning).
-PMESII domains: P (Political), M (Military), E (Economic), S (Social), I (Information), Infra (Infrastructure).
+Frameworks: PMESII (Political, Military, Economic, Social, Information, Infrastructure), METT-TC, PESTLE, systems-based, threat-assessment, root-cause, stakeholder.
+<turn|>
 ```
 
 ## Training Example (tcf-0001 formatted for Gemma 4)
 
-### User message:
+### Full training sequence:
+
 ```
+<|turn>system
+<|think|>You are a planning analyst trained in the Three Column Format (3CF).
+
+When given a scenario, you will:
+
+1. THINK through the scenario in the thought channel — identify relevant factors, deduce their implications using appropriate analytical frameworks (PMESII, METT-TC, PESTLE, systems-based, threat-assessment), and draw actionable conclusions.
+
+2. RESPOND with a structured 3CF analysis in JSON format.
+
+Conclusion categories: ET (Essential Task), PIR (Priority Information Requirement), FFR (Force/Support Requirement), DP (Decision Point), RISK (Risk), REQ (Request to Higher HQ), INFO (Information for Planning).
+Frameworks: PMESII (Political, Military, Economic, Social, Information, Infrastructure), METT-TC, PESTLE, systems-based, threat-assessment, root-cause, stakeholder.
+<turn|>
+<|turn>user
 Analyse the following scenario using the Three Column Format.
 
 SCENARIO: A rifle company (B Coy, 2 RGR) is tasked with seizing OBJ HERON, a bridge crossing point over the Nakon River, in order to enable the advance of the battlegroup main body. The bridge is a 15-tonne capacity concrete structure. Enemy: platoon-sized defensive position with GPMG SF and 81mm mortar support, pre-registered DFs on the bridge approaches. Friendly: company minus, 2x 81mm mortar, FOO attached. Terrain: 6km approach over open farmland, limited cover within 2km of the bridge. Timeline: H-hour in 48 hours.
-```
-
-### Assistant completion:
-```
+<turn|>
+<|turn>model
 <|channel>thought
 Step 1 — Identify factors.
 
@@ -57,24 +83,22 @@ FFR: bridging or reinforcement capability if the bridge won't hold.
 
 This is a single-factor analysis but it's significant — it changes the entire purpose of the mission.
 <channel|>
-
-**FACTOR 1.0:** The bridge at OBJ HERON has a 15-tonne capacity limit.
-
-**DEDUCTIONS:**
-- 1.1 (M): Cannot support Warrior IFV (25t) or loaded Bulldog APC (15t+), limiting armoured vehicle transit.
-- 1.2 (M): If the battlegroup main body includes armoured vehicles, the bridge alone does not enable their advance as stated in the mission.
-
-**CONCLUSIONS:**
-- 1.1.1 [ET]: Confirm bridge capacity against battlegroup vehicle weights before H-hour.
-- 1.2.1 [PIR]: Determine battlegroup main body vehicle composition and identify which assets must cross at OBJ HERON.
-- 1.2.2 [FFR]: Request engineer bridging or reinforcement capability from BG if bridge cannot support main body vehicles.
-- 1.2.3 [RISK]: Risk that the objective does not achieve its stated purpose if vehicle weight exceeds bridge capacity.
+{"factors":[{"id":"1.0","statement":"The bridge at OBJ HERON has a 15-tonne capacity limit."}],"deductions":[{"id":"1.1","factor_ref":"1.0","domain":"M","statement":"Cannot support Warrior IFV (25t) or loaded Bulldog APC (15t+), limiting armoured vehicle transit."},{"id":"1.2","factor_ref":"1.0","domain":"M","statement":"If the battlegroup main body includes armoured vehicles, the bridge alone does not enable their advance as stated in the mission."}],"conclusions":[{"id":"1.1.1","deduction_ref":"1.1","category":"ET","statement":"Confirm bridge capacity against battlegroup vehicle weights before H-hour."},{"id":"1.2.1","deduction_ref":"1.2","category":"PIR","statement":"Determine battlegroup main body vehicle composition and identify which assets must cross at OBJ HERON."},{"id":"1.2.2","deduction_ref":"1.2","category":"FFR","statement":"Request engineer bridging or reinforcement capability from BG if bridge cannot support main body vehicles."},{"id":"1.2.3","deduction_ref":"1.2","category":"RISK","statement":"Risk that the objective does not achieve its stated purpose if vehicle weight exceeds bridge capacity."}]}
+<turn|>
 ```
 
-## Notes
+## How This Maps to Training
 
-- The thinking trace (`<|channel>thought...<channel|>`) contains the raw reasoning — identify, deduce, conclude steps
-- The final response is the clean 3CF with numbering, domain tags, and category labels
-- During fine-tuning, use `completion_only_loss=True` so the model learns from the full assistant output (thinking + response)
-- At inference, the thinking content can be hidden from users — only the final 3CF output is shown
-- The thinking trace should feel natural, not templated — each example should read like someone actually thinking through the problem
+1. **System prompt** — fixed across all examples. Includes `<|think|>` to activate thinking mode.
+2. **User turn** — the scenario text, prefixed with "Analyse the following scenario using the Three Column Format."
+3. **Assistant turn** — the thinking trace in `<|channel>thought...<channel|>` followed by the structured JSON output.
+4. **Training loss** — use `completion_only_loss=True` so the model learns only from the assistant output (thinking + JSON response). The system and user prompts are not trained on.
+5. **At inference** — the thinking content can be hidden from users. Only the final JSON output is shown. Strip `<|channel>thought...<channel|>` from conversation history before sending back (except during function-calling sequences).
+
+## Critical Notes
+
+- **Always include `<turn|>` at the end of the assistant's output.** The model needs to learn the end-of-turn marker.
+- **The thinking trace should feel natural, not templated.** Each example should read like someone actually thinking through the problem. Varied phrasing, different entry points, sometimes hesitant, sometimes confident.
+- **JSON output must be valid.** Validate before including in training data.
+- **For non-thinking fine-tuning data**, add an empty thought channel for stability: `<|channel>thought\n<channel|>`. We don't need this since our data has real thinking traces.
+- **Known bug:** Gemma 4 31B and 26B-A4B have `num_kv_shared_layers=0` which causes an IndexError during inference with cache. Unsloth has fixed this. If using raw transformers, see: https://unsloth.ai/docs/models/gemma-4/train
