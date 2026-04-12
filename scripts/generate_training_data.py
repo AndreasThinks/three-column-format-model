@@ -62,6 +62,13 @@ VALID_DEDUCTION_DOMAINS = {
     "risk", "organisational", "organizational", "resource",
     "technical", "morale", "capability", "capacity", "supply-chain",
     "temporal", "geographic", "demographic", "physiological",
+    "structural", "pharmacological", "infectious", "military",
+    "commercial", "employment", "infrastructural", "climate",
+    "contractual", "pathophysiological", "therapeutic",
+    "recruiting", "adoption", "critical",
+    "marketing", "terrain", "logistics", "nutrition",
+    # PMESII single-letter abbreviations the LLM uses as domain tags
+    "P", "M", "E", "S", "I", "L", "O",
 }
 
 # Minimum word counts to reject thin outputs
@@ -356,9 +363,18 @@ def _is_restatement(deduction: str, factor: str) -> bool:
 
 
 def _has_action_verb(statement: str) -> bool:
-    """Check if a conclusion contains an action verb."""
+    """Check if a conclusion contains an action verb.
+
+    Uses stem matching — 'assessing', 'assessed', 'assesses' all match 'assess'.
+    Checks first 5 characters of each word against verb stems.
+    """
     words = _tokenise(statement)
-    return bool(words & ACTION_VERBS)
+    # Build stem set from ACTION_VERBS (first 5 chars as simple stem)
+    verb_stems = {v[:5] for v in ACTION_VERBS}
+    for word in words:
+        if word[:5] in verb_stems:
+            return True
+    return False
 
 
 def validate_example(example: dict, requested_id: str | None = None,
@@ -653,6 +669,7 @@ def make_rejected(
     reason: str,
     raw_response: str | None = None,
     validation_reasons: list[str] | None = None,
+    parsed: dict | None = None,
 ) -> dict:
     """Create a normalised rejected record with consistent schema."""
     rec = {
@@ -665,6 +682,8 @@ def make_rejected(
         rec["raw_response"] = raw_response[:500]
     if validation_reasons is not None:
         rec["validation_reasons"] = validation_reasons
+    if parsed is not None:
+        rec["parsed"] = parsed
     return rec
 
 
@@ -823,6 +842,7 @@ def main():
                 example_id, target_domain, target_difficulty,
                 reason="validation_failed",
                 validation_reasons=result.reasons,
+                parsed=parsed,
             ))
 
         # Rate limiting: brief pause between calls
