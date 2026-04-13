@@ -22,13 +22,20 @@ three-column-format-model/
 │   ├── format-spec.md      # 3CF format specification
 │   ├── dataset-design.md   # Training data schema and design
 │   ├── training-plan.md    # Fine-tuning approach and milestones
-│   └── project-plan.md     # Milestones and status tracking
+│   ├── project-plan.md     # Milestones and status tracking
+│   └── conversational-format-spec.md  # Conversational training format
 ├── data/
 │   ├── seed_examples.jsonl           # Master seed corpus (30 examples)
-│   ├── seed_examples_expanded.jsonl  # Draft expanded set (may be stale)
-│   ├── seeds_new.md                  # Scratch file
-│   └── gemma4_training_format_example.md  # Gemma 4 chat template example
-├── scripts/                # Processing, generation, training scripts
+│   ├── generated_examples.jsonl      # 581 structured examples (Phase 2)
+│   ├── rejected_examples.jsonl       # Rejected examples for analysis
+│   ├── gemma4_train.jsonl            # 549 formatted training examples (structured)
+│   ├── gemma4_eval.jsonl             # 61 formatted eval examples (structured)
+│   ├── conversational_seeds.jsonl    # 6 hand-crafted conversational seeds (Phase 4)
+│   └── gemma4_training_format_example.md
+├── scripts/
+│   ├── generate_training_data.py     # Structured data generation pipeline
+│   ├── format_training_data.py       # Gemma 4 format converter + splitter
+│   └── generate_conversations.py     # Conversational data generation (planned)
 └── configs/                # Model and training configs
 ```
 

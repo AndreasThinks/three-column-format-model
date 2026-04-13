@@ -66,7 +66,7 @@ VALID_DEDUCTION_DOMAINS = {
     "commercial", "employment", "infrastructural", "climate",
     "contractual", "pathophysiological", "therapeutic",
     "recruiting", "adoption", "critical",
-    "marketing", "terrain", "logistics", "nutrition",
+    "marketing", "terrain", "logistics", "nutrition", "housing",
     # PMESII single-letter abbreviations the LLM uses as domain tags
     "P", "M", "E", "S", "I", "L", "O",
 }

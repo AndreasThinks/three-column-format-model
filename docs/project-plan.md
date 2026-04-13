@@ -2,13 +2,17 @@
 
 ## Goal
 
-Fine-tune an open-weight language model to apply the Three Column Format (3CF) reasoning pattern to any problem domain. The 3CF is a structured analytical method: identify a relevant factor, deduce its implications, derive an actionable conclusion. It originated in British/NATO military planning but the reasoning pattern is domain-agnostic.
+Fine-tune an open-weight language model that **thinks** in the Three Column Format (3CF) and **speaks** naturally.
 
-The model should be able to take a scenario in any domain — military, business, medical, engineering, policy, crisis management — and produce a structured 3CF analysis with visible reasoning traces.
+The 3CF is a structured analytical method: identify a relevant factor, deduce its implications, derive an actionable conclusion. It originated in British/NATO military planning but the reasoning pattern is domain-agnostic.
+
+The model's thought channel uses 3CF internally (factor → deduction → conclusion, with framework tags and audit trails). Its spoken output is conversational — explains reasoning, recommends actions, asks follow-ups. Users get the benefit of structured analytical thinking without needing to know the format exists.
 
 ## What This Is
 
-Not a military planning tool. A general-purpose structured reasoning model that uses the 3CF as its analytical scaffold. The military heritage provides the canonical structure (numbering, audit trail, conclusion categories) but the training data spans domains to teach the pattern, not the jargon.
+A conversational AI that reasons rigorously under the hood. The 3CF structure lives in the thinking trace — invisible to the user — and the model translates that structured analysis into natural, useful dialogue.
+
+The military heritage provides the canonical structure (numbering, audit trail, conclusion categories) but the training data spans domains to teach the pattern, not the jargon.
 
 ## Key Insight
 
@@ -17,7 +21,7 @@ The 3CF answers three universal questions:
 - **So What?** — What does it mean?
 - **Therefore?** — What should we do about it?
 
-These questions apply everywhere. The model needs to learn the chain, not the domain.
+These questions apply everywhere. The model needs to learn the chain, not the domain, and communicate it like a human analyst would.
 
 ---
 
@@ -45,126 +49,226 @@ These questions apply everywhere. The model needs to learn the chain, not the do
 
 ---
 
-## Phase 2: Data Generation (NEXT)
+## Phase 2: Structured Data Generation (DONE)
 
-### 2.1 Generation script
-- Build a Python script that:
-  - Takes seed examples as exemplars
-  - Calls an LLM API (Claude or similar) to generate new scenarios + reasoning traces
-  - Validates output structure (JSON validity, numbering, audit trail, domain tags)
-  - Writes validated examples to JSONL
-  - Tracks generation stats (success rate, rejection reasons)
+### 2.1 Generation script ✓
+- Built at `scripts/generate_training_data.py`
+- Validated against live API (Haiku + Gemini Flash)
+- Reviewed by Claude Opus (two passes)
+- Committed and pushed to GitHub
 
-### 2.2 Generation parameters
-- **Target volume:** 500-1000 generated examples
-- **Domain distribution:** proportional to seed coverage, roughly:
-  - Military: 30%
-  - Business: 20%
-  - Medical: 15%
-  - Engineering: 15%
-  - Policy: 10%
-  - Crisis management: 10%
-- **Difficulty distribution:**
-  - Basic (1 factor): 25%
-  - Intermediate (2-4 factors): 50%
-  - Advanced (5+ factors, cross-domain): 25%
+### 2.2 Results
+- **Haiku pass:** 132 passed / 750 attempted (17.6%)
+- **Gemini Flash pass:** 449 passed / 750 attempted (59.9%)
+- **Combined:** 581 generated + 30 seeds = 611 total (610 after validation)
+- **Cost:** under $1 total
 
-### 2.3 Quality filtering
-- Automated checks: JSON validity, numbering chain, required fields present
-- Sample-based manual review: 10% of generated examples checked for analytical depth
-- Reject and regenerate weak examples
-- Iterate on generation prompt based on rejection patterns
+### 2.3 Formatting ✓
+- Standalone converter: `scripts/format_training_data.py`
+- Gemma 4 chat template with thinking mode
+- Cross-reference validation (factor/deduction chain integrity)
+- 90/10 train/eval split: **549 train, 61 eval**
 
-### 2.4 Dataset splits
-- Training: 90%
-- Evaluation: 10% (held out, never used for generation prompts)
+### 2.4 Domain distribution (610 clean)
 
-**Deliverable:** 500-1000 validated training examples in JSONL, train/eval split.
+| Domain | Count |
+|--------|-------|
+| Engineering | 94 |
+| Defensive | 85 |
+| Offensive | 77 |
+| Business | 74 |
+| Stability | 73 |
+| Crisis | 68 |
+| Policy | 62 |
+| Humanitarian | 54 |
+| Medical | 23 |
 
----
-
-## Phase 3: Training
-
-### 3.1 Environment setup
-- Gemma 4 26B-A4B MoE from HuggingFace (`google/gemma-4-26B-A4B-it`)
-- Unsloth for QLoRA fine-tuning (4-bit NF4, bfloat16 compute)
-- Single GPU (Tesla P40 24GB) — see VRAM decision tree below
-
-### 3.2 VRAM Decision Tree
-
-| Option | Model | Method | VRAM | Confidence |
-|--------|-------|--------|------|------------|
-| A (try first) | 26B-A4B MoE | QLoRA | ~15-20GB est. | Untested — may OOM |
-| B (fallback) | 31B Dense | QLoRA | 22 GB | Confirmed working |
-| C (cloud) | 26B-A4B MoE | QLoRA | 40GB+ (A100) | Always works |
-
-- **Try Option A first.** Unsloth has MoE-specific Triton kernels (12x speedup claim). The 4-bit quantized base model is ~12.5GB, leaving ~11.5GB for adapters/gradients/optimizer. It might fit.
-- **If OOM, switch to Option B.** 31B Dense QLoRA is confirmed at 22GB. Strong model, proven fine-tuning path.
-- **Option C if we need MoE regardless.** Lambda Labs A100 40GB or RunPod.
-
-### 3.3 Base model evaluation
-- Run base Gemma 4 on the eval set before any training
-- Establish baseline for: format compliance, reasoning depth, audit trail integrity
-- This tells us what the model already knows vs what the fine-tune adds
-
-### 3.4 Training run
-- LoRA rank: 16-32, alpha: 32-64
-- Target modules: all-linear
-- Learning rate: 1e-4, linear schedule
-- Epochs: 3 (monitor eval loss for overfitting)
-- Batch size: 4-8, gradient accumulation: 2
-- Max sequence length: 2048-4096
-- completion_only_loss: True
-
-### 3.5 Checkpoint evaluation
-- Evaluate after each epoch on held-out eval set
-- Metrics: format compliance, audit trail integrity, deduction depth, conclusion actionability
-- Select best checkpoint based on eval metrics
-
-### 3.6 Merge and quantise
-- Merge LoRA adapters into base model
-- GGUF quantisation via llama.cpp for local deployment
-- Test inference quality on held-out and novel scenarios
-
-**Deliverable:** Fine-tuned Gemma 4 model, quantised for local deployment.
+**Deliverable:** 610 validated training examples in Gemma 4 format, 90/10 train/eval split. ✓
 
 ---
 
-## Phase 4: Evaluation
+## Phase 3: Structured Data (DONE — model training skipped)
 
-### 4.1 Automated evaluation
-- **Format compliance:** Valid JSON, correct fields, all columns present
-- **Audit trail integrity:** Numbering chain is valid (1.0 → 1.1 → 1.1.1)
-- **Factor quality:** Statements are factual, not analytical
-- **Deduction depth:** Genuine analysis, not restatement
-- **Conclusion actionability:** Real planning outputs with correct category tags
+The structured JSON data serves as analytical backbone for conversational training. Training the JSON model was considered but skipped — the conversational model is the end goal, and the pipeline validation happens naturally during conversational training.
+
+### What we keep
+- 610 validated structured examples (analytical backbone)
+- Generation pipeline (`scripts/generate_training_data.py`)
+- Format converter (`scripts/format_training_data.py`)
+- HF Hub dataset (public, useful for community)
+
+### What we skip
+- Training the JSON output model
+- Merging/quantising structured model
+- Structured model evaluation
+
+**Deliverable:** Validated analytical dataset and generation pipeline. Ready to pivot to conversational data. ✓
+
+---
+
+## Phase 4: Conversational Data Generation (NEXT)
+
+The pivot. Instead of training the model to output JSON, train it to **think** in 3CF and **speak** in natural language.
+
+### 4.1 Design
+
+**Training format change — what shifts:**
+- **Thought channel:** still contains structured 3CF reasoning (factors, deductions, conclusions with audit trail). Same analytical depth as Phase 2 data.
+- **Response:** natural conversational language. Explains the reasoning, recommends actions, asks follow-ups. No JSON. No rigid schema.
+- **User turns:** varied. Questions, requests for help, "what should I do about X?", scenario descriptions, follow-up questions. Not one fixed prompt.
+- **Multi-turn conversations:** 2-5 turns per example. The model reasons through 3CF at each turn, building on prior context.
+
+**Format spec:** `docs/conversational-format-spec.md` (written, detailed)
+
+**Conversational seeds:** `data/conversational_seeds.jsonl` (9 hand-crafted examples, written)
+
+| Seed | Domain | Turns | Pattern | Scenario ref |
+|------|--------|-------|---------|-------------|
+| conv-0001 | Business | 3 | Question → Analysis → Technical deep-dive | tcf-0004 (API deprecation) |
+| conv-0002 | Engineering | 3 | Crisis → Immediate response → Escalation | tcf-0008 (RCE vulnerability) |
+| conv-0003 | Policy | 3 | Decision → Trade-off analysis → Policy refinement | tcf-0018 (STR regulation) |
+| conv-0004 | Humanitarian | 3 | Urgent scenario → Triage response → Disease outbreak | tcf-0021 (water crisis) |
+| conv-0005 | Crisis | 2 | Situation report → Priority ordering → Cascading failure | tcf-0023 (ice storm) |
+| conv-0006 | Medical | 3 | Scaling question → Framing challenge → Progress check | tcf-0005 (meningitis outbreak) |
+| conv-0007 | Defensive | 3 | Withdrawal problem → Technical response → Demolition decision | tcf-0014 (withdrawal) |
+| conv-0008 | Stability | 3 | Convoy planning → IED discovery → Hold/reassess decision | tcf-0030 (convoy) |
+| conv-0009 | Offensive | 3 | Attack with civilians → Reframing → Bypass analysis | tcf-0002 (battlegroup attack) |
+
+**Generation script:** `scripts/generate_conversations.py` (written, tested dry-run)
+
+Built-in quality filters:
+- Thinking trace must contain Factor, Deduction, Conclusion with proper numbering
+- No JSON leakage in responses (regex check)
+- Response length minimum (20 words)
+- Domain tag validation against approved set
+- User turn template detection (rejects "Analyse the following scenario")
+- Alternating role enforcement
+
+Design decisions learned from review:
+- Approach A (fresh fine-tune) — no system prompt conflict with structured data
+- Continuation turns should briefly restate key factors
+- User framings weighted by domain (crisis=panicked/operational, military=operational/decision_maker, business=decision_maker/executive)
+- Turn count distribution: 2 turns (15%), 3 turns (55%), 4 turns (20%), 5 turns (10%)
+
+**Example training turn:**
+```
+<|turn>user
+We're 6 weeks from launching a new product and our supply chain just lost its primary supplier for a key component. What are our options?
+<turn|>
+<|turn>model
+<|channel>thought
+Factor 1.0: Primary supplier for key component is lost, 6 weeks to launch.
+Deduction 1.1: Component sourcing now has lead time risk — new supplier qualification typically takes 8-12 weeks. Domain: logistical.
+Deduction 1.2: If component is bespoke, no quick alternative exists. Domain: operational.
+Conclusion 1.1.1 (DP): Decision point — is the launch date fixed or can it flex? This determines whether we're looking for a fast substitute or a permanent replacement.
+Conclusion 1.1.2 (ET): Immediately identify whether the component is proprietary or COTS. If COTS, source alternatives. If proprietary, assess stockpiles and negotiate with the original supplier's sub-suppliers.
+<channel|>
+Okay, this is a tight one but it's not unsalvageable. The first thing I'd want to know is whether your launch date is immovable or has some flex, because that completely changes what options look like.
+...
+<turn|>
+```
+
+### 4.2 Seed adaptation
+- Existing 30 seeds become the analytical backbone
+- Each seed generates conversational variants: 3-5 user framings × 2-3 conversation lengths
+- User framings vary: direct question, worried stakeholder, executive briefing, peer discussion, adversarial challenge
+- Thinking traces stay structured; responses become conversational
+
+### 4.3 Generation pipeline
+- Adapt `scripts/generate_training_data.py` for conversational output
+- New prompt: "given this scenario and analytical backbone, generate a multi-turn conversation where the assistant reasons through 3CF internally and speaks naturally"
+- Same quality filters: thinking trace must contain genuine factors/deductions/conclusions, response must be natural language (no JSON leakage)
+- Same generation model options: Haiku + Gemini Flash
+
+### 4.4 Volume targets
+- **Target:** 500-800 conversational examples
+- **Turns per example:** 2-5 (varied)
+- **Domain distribution:** same as Phase 2, but also cover chat-specific patterns:
+  - Clarifying questions (model asks for missing info)
+  - Contradicting a user's assumption
+  - Escalating urgency
+  - Weighing tradeoffs between options
+  - Follow-up analysis after initial response
+
+### 4.5 New quality criteria
+- **No JSON leakage:** the response must never contain raw JSON or structured schemas
+- **Thinking trace quality:** same 3CF standards — genuine deductions, not restatements
+- **Conversational quality:** natural phrasing, varied openings, appropriate tone for the domain
+- **Context continuity:** multi-turn examples must maintain analytical thread across turns
+- **Thinking/response alignment:** the conversational response must accurately reflect the structured reasoning in the thought channel
+
+**Deliverable:** 500-800 multi-turn conversational training examples with 3CF reasoning in thought channel, natural language in response.
+
+---
+
+## Phase 5: Conversational Training
+
+### 5.1 Dataset preparation
+- Format conversational examples into Gemma 4 chat template
+- Same system prompt (3CF analyst persona, thinking mode enabled)
+- Multi-turn structure preserved in training data
+- 90/10 train/eval split
+
+### 5.2 Training options
+
+| Approach | Description | When |
+|----------|-------------|------|
+| A (fresh fine-tune) | Train base Gemma 4 on conversational data only | If Phase 3 validates that 3CF transfers well |
+| B (continued fine-tune) | Start from Phase 3 checkpoint, fine-tune on conversational data | If the structured model has strong analytical quality we want to preserve |
+| C (mixed dataset) | Combine structured + conversational data in one training run | If we want one model that can do both |
+
+**Recommendation:** Start with Approach B. The Phase 3 checkpoint already knows 3CF reasoning. Fine-tuning it on conversational data teaches it to express that reasoning in prose without losing the analytical backbone.
+
+### 5.3 Training parameters
+- Same infrastructure as Phase 3 (HF Jobs)
+- Lower learning rate for continued fine-tuning (5e-5 vs 1e-4)
+- Fewer epochs (1-2 vs 3) — avoid catastrophic forgetting
+- Monitor eval loss closely for overfitting
+
+### 5.4 Evaluation
+- **Analytical quality:** Does the thought channel still contain genuine 3CF reasoning?
+- **Conversational quality:** Is the response natural, useful, and appropriately toned?
+- **Thinking/response alignment:** Does what the model says match what it thinks?
+- **Multi-turn coherence:** Does it maintain analytical context across turns?
+- **Domain transfer:** Does it handle unseen domains as well as the structured model?
+
+**Deliverable:** Fine-tuned conversational model that thinks in 3CF and speaks naturally.
+
+---
+
+## Phase 6: Evaluation
+
+### 6.1 Automated evaluation
+- **Thought channel analysis:** Does each response contain a valid 3CF structure in the thought channel?
+- **Audit trail integrity:** Is the reasoning chain coherent?
+- **Response quality:** Is the natural language output relevant, accurate, and actionable?
 - **Cross-domain generalisation:** Performance on unseen domains
 
-### 4.2 Human evaluation
-- Sample 50 outputs across domains
-- Score: reasoning quality (1-5), format correctness (1-5), actionability (1-5)
+### 6.2 Human evaluation
+- Sample 50 conversations across domains
+- Score: reasoning quality (1-5), conversational naturalness (1-5), actionability (1-5), thinking/response alignment (1-5)
 - Identify systematic failure modes
 
-### 4.3 Comparison
-- Base Gemma 4 vs fine-tuned version (before/after)
-- If available: compare against Qwen3-14B or other models on same eval set
+### 6.3 Comparison
+- Base Gemma 4 vs Phase 3 (structured) vs Phase 5 (conversational)
+- Measure: does conversational training preserve analytical quality?
 
 **Deliverable:** Eval report with metrics, failure mode analysis, and recommendations.
 
 ---
 
-## Phase 5: Deployment and Documentation
+## Phase 7: Deployment and Documentation
 
-### 5.1 Model distribution
+### 7.1 Model distribution
 - Upload quantised model to HuggingFace (or keep local)
 - Document inference parameters (temperature, top_p, system prompt)
 - Provide example inference scripts
 
-### 5.2 Usage documentation
-- How to prompt the model for different domains
-- How to interpret the 3CF output
+### 7.2 Usage documentation
+- How to use the model in conversational settings
+- How to access/reason about the thinking trace
 - Limitations and known failure modes
-- When to use the thinking trace vs just the final output
+- When to use the structured JSON model vs the conversational model
 
 **Deliverable:** Deployable model with usage documentation.
 
@@ -182,14 +286,16 @@ three-column-format-model/
 │   ├── dataset-design.md      ← training data schema
 │   └── training-plan.md       ← Gemma 4 fine-tuning approach
 ├── data/
-│   ├── seed_examples.jsonl    ← 30 hand-crafted seeds
+│   ├── seed_examples.jsonl    ← 30 hand-crafted seeds (analytical backbone)
+│   ├── generated_examples.jsonl   ← 581 structured examples (Phase 2)
+│   ├── rejected_examples.jsonl    ← rejected examples for analysis
+│   ├── gemma4_train.jsonl         ← 549 formatted training examples
+│   ├── gemma4_eval.jsonl          ← 61 formatted eval examples
 │   └── gemma4_training_format_example.md
 ├── scripts/
-│   ├── generate.py            ← data generation pipeline
-│   ├── validate.py            ← quality checks
-│   └── train.py               ← training script
-├── configs/
-│   └── training_config.yaml
+│   ├── generate_training_data.py  ← structured data generation pipeline
+│   ├── format_training_data.py    ← Gemma 4 format converter + splitter
+│   └── generate_conversations.py  ← conversational data generation (Phase 4)
 └── eval/
     ├── eval_metrics.py
     └── eval_report.md
@@ -197,47 +303,38 @@ three-column-format-model/
 
 ## Current Status
 
-**Phase 2 in progress.** Generation script built, validated, and running. Gemini Flash pass underway overnight.
+**Phase 3 (structured data) complete. Phase 4 (conversational data generation) in progress.**
 
-### Data status (as of 12 Apr 2026)
-- **Seed corpus:** 30 hand-crafted examples (tcf-0001 through tcf-0030)
-- **Haiku pass (complete):** 132 passed / 750 attempted (17.6% pass rate). $129 cost. Output: `data/generated_examples.jsonl`
-- **Gemini Flash pass (running):** `--resume` mode, skipping 750 already-attempted IDs. Using `google/gemini-2.0-flash-001`. Cost: ~$1 for full run. Test run showed **71% pass rate** with stem-based verb matching and expanded domain tags.
-- **Estimated total after Gemini Flash completes:** ~530 + 132 = ~660 examples
+### Data status (as of 13 Apr 2026)
+- **Seed corpus:** 30 hand-crafted examples (tcf-0001 through tcf-0030) — analytical backbone
+- **Structured examples:** 610 clean (581 generated + 30 seeds - 1 validation failure)
+- **Gemma 4 formatted (structured):** 549 train + 61 eval (90/10 split)
+- **Total cost so far:** under $1
+- **Format converter:** `scripts/format_training_data.py` (standalone, tested)
 
-### Generation script improvements (done)
-- Stem-based action verb matching (5-char stem comparison)
-- ~60 valid domain tags including PMESII abbreviations
-- Outermost-brace JSON parser (depth-tracking)
-- Gemma 4 chat template output (`--format gemma4`)
-- Rejected records now store raw parsed JSON for re-filtering
-- Framework validation with alias support
+### Next steps
+1. **Test generation:** Run a small batch (5-10 examples) to validate output quality before scaling
+2. **Review generated conversations:** Check thinking/response alignment, natural voice, no JSON leakage
+3. **Iterate on generation prompt:** Adjust based on failure patterns
+4. **Scale:** Generate 500-800 conversational examples
+5. **Format for training:** Gemma 4 template converter for conversational data
+6. **Train:** Fine-tune Gemma 4 on conversational data (HF Jobs, QLoRA, Approach A: fresh fine-tune)
 
-### What's running overnight
-- Process: `proc_7f24bb59b1cb` — Gemini Flash full pass with `--resume`
-- Command: `uv run scripts/generate_training_data.py --resume --model google/gemini-2.0-flash-001`
-- Output: appends to `data/generated_examples.jsonl` and `data/rejected_examples.jsonl`
-- Expected completion: ~4-5 hours from 22:00 BST
+### Design decisions
+- Skipping structured JSON model training — conversational model is the end goal
+- Structured examples become analytical backbone/reference, not training data
+- Continued fine-tuning from conversational-only data (Approach A/B TBD after first run)
 
-### Tomorrow morning checklist
-1. Check generation completed: `tail -5 ~/.hermes/logs/` or check process status
-2. Verify output: `wc -l data/generated_examples.jsonl` — expect ~530+ new examples
-3. Combine seeds + generated into training set
-4. Run `--format gemma4` converter or write a quick merge script
-5. Create train/eval split (90/10)
-6. Start training pipeline (Phase 3)
-
-## Phase 2: Data Generation (IN PROGRESS)
-
-### 2.1 Generation script ✓
-- Built at `scripts/generate_training_data.py`
-- Validated against live API (Haiku + Gemini Flash)
-- Reviewed by Claude Opus (two passes)
-- Committed and pushed to GitHub
+### Known issues
+- tcf-0010 has a broken cross-reference (conclusion 3.0.1 → deduction 3.0)
+- Medical domain underrepresented (23 vs 60-90 for others)
+- Gemma 4 MoE QLoRA VRAM on A10g-small is untested (A100-large fallback available)
 
 ## Risks
 
-- **Analytical depth in generated data:** The biggest risk. Shallow deductions that restate factors will produce a model that formats well but thinks poorly. Mitigation: strong seeds, iterative prompt refinement, manual review.
-- **MoE QLoRA VRAM:** 26B-A4B QLoRA may not fit in 24GB. Mitigation: 31B Dense fallback (confirmed 22GB), or cloud GPU.
-- **Domain vocabulary drift:** Generated examples might use inconsistent terminology within a domain. Mitigation: seed exemplars per domain, generation prompt with domain-specific vocabulary guidance.
-- **Sequence length:** Thinking traces + structured output can be long. May need to cap at 4096 tokens, which could truncate complex analyses. Mitigation: monitor length distribution, adjust max_seq_len accordingly.
+- **Thinking/response misalignment:** The conversational response might not accurately reflect the structured reasoning in the thought channel. Mitigation: strong seed examples that demonstrate alignment, quality checks during generation.
+- **Catastrophic forgetting in continued fine-tuning:** Training on conversational data might degrade the structured reasoning from Phase 3. Mitigation: low learning rate, few epochs, monitor eval loss.
+- **Conversational data quality:** Natural language is harder to validate than structured JSON. Shallow or formulaic responses will produce a model that sounds like a template. Mitigation: varied user framings, manual review of generated conversations.
+- **Domain vocabulary drift:** Generated conversations might use inconsistent terminology within a domain. Mitigation: seed exemplars per domain, generation prompt with domain-specific vocabulary guidance.
+- **Sequence length:** Multi-turn conversations with thinking traces can be long. May need to cap at 4096 tokens, which could truncate complex analyses. Mitigation: monitor length distribution, adjust max_seq_len accordingly.
+- **MoE QLoRA VRAM:** 26B-A4B QLoRA may not fit in 24GB. Mitigation: 31B Dense fallback (confirmed 22GB), or A100 cloud GPU.
