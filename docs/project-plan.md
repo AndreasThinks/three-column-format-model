@@ -134,15 +134,22 @@ The pivot. Instead of training the model to output JSON, train it to **think** i
 | conv-0008 | Stability | 3 | Convoy planning → IED discovery → Hold/reassess decision | tcf-0030 (convoy) |
 | conv-0009 | Offensive | 3 | Attack with civilians → Reframing → Bypass analysis | tcf-0002 (battlegroup attack) |
 
-**Generation script:** `scripts/generate_conversations.py` (written, tested dry-run)
+**Generation script:** `scripts/generate_conversations.py` (written, tested, running)
 
 Built-in quality filters:
 - Thinking trace must contain Factor, Deduction, Conclusion with proper numbering
+- **Conclusion category tags enforced** (ET/PIR/FFR/DP/RISK/INFO/REQ) — inline format matching seeds
 - No JSON leakage in responses (regex check)
 - Response length minimum (20 words)
-- Domain tag validation against approved set
+- Domain tag validation against approved set (added "ethical" and "Information" as fixes pending)
 - User turn template detection (rejects "Analyse the following scenario")
 - Alternating role enforcement
+
+Generation status:
+- Target: 750 attempts (30 seeds × 25 variations)
+- Current: running in background, ~375+ generated
+- Pass rate: ~85-90% (rejections mostly role ordering and domain tag edge cases)
+- Category tagging fix confirmed working — recent examples have ET, FFR, RISK, DP tags
 
 Design decisions learned from review:
 - Approach A (fresh fine-tune) — no system prompt conflict with structured data

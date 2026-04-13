@@ -61,7 +61,7 @@ VALID_DOMAINS = {
     "economic", "health", "safety", "security", "infrastructure",
     "clinical", "epidemiological", "communications", "governance",
     "analytical", "regulatory", "medical", "humanitarian",
-    "housing", "educational", "systemic",
+    "housing", "educational", "systemic", "ethical", "information",
 }
 
 VALID_CATEGORIES = {"ET", "PIR", "FFR", "DP", "RISK", "REQ", "INFO"}
