@@ -30,7 +30,7 @@ three-column-format-model/
 │   ├── rejected_examples.jsonl       # Rejected examples for analysis
 │   ├── gemma4_train.jsonl            # 549 formatted training examples (structured)
 │   ├── gemma4_eval.jsonl             # 61 formatted eval examples (structured)
-│   ├── conversational_seeds.jsonl    # 6 hand-crafted conversational seeds (Phase 4)
+│   ├── conversational_seeds.jsonl    # 9 hand-crafted conversational seeds (Phase 4)
 │   └── gemma4_training_format_example.md
 ├── scripts/
 │   ├── generate_training_data.py     # Structured data generation pipeline

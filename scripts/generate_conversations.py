@@ -105,10 +105,18 @@ Generate a {num_turns}-turn conversation between a user and an AI assistant.
 
 For EACH assistant turn, produce TWO things:
 
-1. **thinking**: A structured 3CF reasoning trace in the thought channel. Format:
-   - Factor X.Y: [fact stated clean]
-   - Deduction X.Y.Z: [implication, genuine analysis not restatement] Domain: [valid tag]
-   - Conclusion X.Y.Z.W: [actionable output] Category: [ET/PIR/FFR/DP/RISK/INFO/REQ]
+1. **thinking**: A structured 3CF reasoning trace in the thought channel. You MUST use this exact format:
+   ```
+   Factor 1.0: [fact stated clean]
+   Factor 2.0: [another fact]
+   
+   Deduction 1.1: [implication, genuine analysis not restatement] Domain: [valid tag]
+   Deduction 2.1: [implication] Domain: [valid tag]
+   
+   Conclusion 1.1.1 (ET): [actionable output]
+   Conclusion 2.1.1 (RISK): [risk statement]
+   ```
+   CRITICAL: The conclusion category tag (ET, PIR, FFR, DP, RISK, INFO, REQ) MUST appear in parentheses immediately after the conclusion number. Every single conclusion must have a category tag. No exceptions.
    - Include informal asides between structured items (e.g. "Okay, so what's actually going on here?")
    - For continuation turns, briefly restate key factors before introducing new ones
 
@@ -227,11 +235,21 @@ def validate_conversation(example: dict) -> ValidationResult:
     # Check conclusion categories
     for i, turn in enumerate(conv):
         if turn.get("role") == "model" and "thinking" in turn:
-            categories = re.findall(r"\(([A-Z]+)\)", turn["thinking"])
+            thinking = turn["thinking"]
+            # Find all conclusions and check they have category tags
+            conclusion_lines = re.findall(r"Conclusion\s+\d[\d.]*\s*(.*)", thinking)
+            for cl in conclusion_lines:
+                cl = cl.strip()
+                # Must start with (CATEGORY) or be empty (which means no conclusion text, also bad)
+                if not cl:
+                    reasons.append(f"turn {i}: conclusion with no content")
+                elif not re.match(r"^\([A-Z]+\)", cl):
+                    reasons.append(f"turn {i}: conclusion missing category tag (need ET/PIR/FFR/DP/RISK/INFO/REQ)")
+            # Also check categories found match valid set
+            categories = re.findall(r"\(([A-Z]+)\)", thinking)
             for cat in categories:
-                if cat not in VALID_CATEGORIES and cat not in {"DP", "ET", "PIR", "FFR", "RISK", "INFO", "REQ"}:
-                    # Only flag if it looks like a conclusion category (after "Conclusion")
-                    pass
+                if cat not in VALID_CATEGORIES:
+                    reasons.append(f"turn {i}: invalid conclusion category '{cat}'")
 
     # Check user turns aren't templated
     for i, turn in enumerate(conv):
